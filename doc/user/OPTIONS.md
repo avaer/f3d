@@ -12,6 +12,10 @@ The input file or files to read, can also be provided as a positional argument. 
 
 Instead of showing a render view and render into it, _render directly into a png file_. When used with --ref option, only outputs on failure. If `-` is specified instead of a filename, the PNG file is streamed to the stdout. Can use [template variables](#filename-templating).
 
+### `--depth-output=<png file>` (_string_)
+
+Instead of showing a render view, _render the z-buffer depth directly into a 16-bit grayscale png file_. Each pixel stores the normalized depth-buffer value scaled to `[0, 65535]`, where `0` is the near plane and `65535` is the far plane or background. This is the raw depth-buffer value, not a linear camera-space distance. Can use [template variables](#filename-templating).
+
 ### `--no-background` (_bool_, default: `false`)
 
 Use with --output to output a png file with a transparent background.

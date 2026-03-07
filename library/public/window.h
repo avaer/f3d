@@ -78,6 +78,15 @@ public:
   [[nodiscard]] virtual image renderToImage(bool noBackground = false) = 0;
 
   /**
+   * Perform a render of the window to the screen and save the z-buffer result in a f3d::image.
+   * The returned image is a single-channel SHORT image suitable for 16-bit grayscale PNG output.
+   * Each output pixel stores the normalized depth-buffer value clamped to [0, 1] and quantized
+   * to [0, 65535]. A value of 0 corresponds to the near plane and 65535 corresponds to the far
+   * plane or background. This is depth-buffer space, not linear camera-space distance.
+   */
+  [[nodiscard]] virtual image renderDepthToImage() = 0;
+
+  /**
    * Set the size of the window.
    */
   virtual window& setSize(int width, int height) = 0;

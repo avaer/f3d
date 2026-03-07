@@ -375,6 +375,7 @@ void vtkF3DRenderer::ConfigureRenderPasses()
   }
 
   vtkNew<vtkF3DRenderPass> newPass;
+  this->SceneRenderPass = newPass;
 #if F3D_MODULE_RAYTRACING
   newPass->SetUseRaytracing(this->UseRaytracing);
 #endif
@@ -484,6 +485,12 @@ void vtkF3DRenderer::ConfigureRenderPasses()
   }
 #endif
   this->RenderPassesConfigured = true;
+}
+
+//----------------------------------------------------------------------------
+vtkF3DRenderPass* vtkF3DRenderer::GetSceneRenderPass() const
+{
+  return this->SceneRenderPass;
 }
 
 //----------------------------------------------------------------------------

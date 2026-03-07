@@ -4,6 +4,7 @@ list(APPEND libf3dSDKTests_list
      TestSDKCamera.cxx
      TestSDKCompareWithFile.cxx
      TestSDKDeprecatedOptions.cxx
+     TestSDKDepthOutput.cxx
      TestSDKDynamicLightIntensity.cxx
      TestSDKEngine.cxx
      TestSDKEngineExceptions.cxx
@@ -150,6 +151,8 @@ foreach (test ${libf3dSDKTests_list})
     set_tests_properties(libf3d::${TName} PROPERTIES DISABLED ON)
   endif ()
 endforeach ()
+
+set_tests_properties(libf3d::TestSDKDepthOutput PROPERTIES DEPENDS "f3d::TestDepthOutput")
 
 # Specific test properties to check
 # CTest can't check colored output as it contains special chars

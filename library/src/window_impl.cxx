@@ -19,11 +19,14 @@
 #include <vtkImageData.h>
 #include <vtkImageExport.h>
 #include <vtkInformation.h>
+#include <vtkPixelBufferObject.h>
 #include <vtkPNGReader.h>
 #include <vtkPointGaussianMapper.h>
 #include <vtkRenderWindowInteractor.h>
+#include <vtkRendererSource.h>
 #include <vtkRendererCollection.h>
 #include <vtkRenderingOpenGLConfigure.h>
+#include <vtkTextureObject.h>
 #include <vtkVersion.h>
 #include <vtkWindowToImageFilter.h>
 
@@ -47,7 +50,10 @@
 #include <vtkOSOpenGLRenderWindow.h>
 #endif
 
+#include <algorithm>
+#include <cmath>
 #include <sstream>
+#include <vector>
 
 namespace fs = std::filesystem;
 
@@ -654,6 +660,72 @@ image window_impl::renderToImage(bool noBackground)
 
   image output(dims[0], dims[1], cmp);
   exporter->Export(output.getContent());
+
+  return output;
+}
+
+//----------------------------------------------------------------------------
+image window_impl::renderDepthToImage()
+{
+  this->render();
+
+  auto* renderPass = this->Internals->Renderer->GetSceneRenderPass();
+  auto* depthTexture = renderPass ? renderPass->GetMainDepthTexture() : nullptr;
+
+  if (!depthTexture)
+  {
+    vtkNew<vtkRendererSource> rendererSource;
+    rendererSource->SetInput(this->Internals->Renderer);
+    rendererSource->WholeWindowOff();
+    rendererSource->DepthValuesOnlyOn();
+    rendererSource->RenderFlagOn();
+    rendererSource->Update();
+
+    int dims[3] = { 0, 0, 0 };
+    rendererSource->GetOutput()->GetDimensions(dims);
+    image output(dims[0], dims[1], 1, image::ChannelType::SHORT);
+    const auto* depthFloat =
+      static_cast<const float*>(rendererSource->GetOutput()->GetScalarPointer());
+
+    auto* outputPtr = static_cast<unsigned short*>(output.getContent());
+    const size_t pixelCount = static_cast<size_t>(dims[0]) * static_cast<size_t>(dims[1]);
+
+    // Depth output stores the raw normalized z-buffer value, not linear camera-space distance.
+    // The captured float depth is expected in [0, 1], where 0 is the near plane and 1 is the far
+    // plane or background. The PNG encoding is a single-channel 16-bit grayscale image using:
+    // encoded = round(clamp(depth, 0.0, 1.0) * 65535.0).
+    for (size_t i = 0; i < pixelCount; ++i)
+    {
+      const float depth = std::isfinite(depthFloat[i]) ? depthFloat[i] : 1.0f;
+      const float clampedDepth = std::clamp(depth, 0.0f, 1.0f);
+      outputPtr[i] = static_cast<unsigned short>(std::round(clampedDepth * 65535.0f));
+    }
+
+    return output;
+  }
+
+  unsigned int dims[2] = { depthTexture->GetWidth(), depthTexture->GetHeight() };
+  vtkIdType incr[2] = { 0, 0 };
+  std::vector<float> depthFloat(static_cast<size_t>(dims[0]) * static_cast<size_t>(dims[1]));
+  vtkSmartPointer<vtkPixelBufferObject> pbo;
+  pbo.TakeReference(depthTexture->Download());
+  pbo->Download2D(VTK_FLOAT, depthFloat.data(), dims, depthTexture->GetComponents(), incr);
+
+  image output(dims[0], dims[1], 1, image::ChannelType::SHORT);
+
+  auto* outputPtr = static_cast<unsigned short*>(output.getContent());
+  const size_t pixelCount = static_cast<size_t>(dims[0]) * static_cast<size_t>(dims[1]);
+
+  // Depth output stores the raw normalized z-buffer value, not linear camera-space distance.
+  // The captured float depth is expected in [0, 1], where 0 is the near plane and 1 is the far
+  // plane or background. The PNG encoding is a single-channel 16-bit grayscale image using:
+  // encoded = round(clamp(depth, 0.0, 1.0) * 65535.0).
+  for (size_t i = 0; i < pixelCount; ++i)
+  {
+    const float depth = std::isfinite(depthFloat[i]) ? depthFloat[i] : 1.0f;
+    const float clampedDepth = std::clamp(depth, 0.0f, 1.0f);
+    outputPtr[i] = static_cast<unsigned short>(std::round(clampedDepth * 65535.0f));
+  }
 
   return output;
 }

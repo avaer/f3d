@@ -1153,6 +1153,7 @@ f3d_test(NAME TestOutput DATA cow.vtp NO_BASELINE)
 f3d_test(NAME TestOutputOutput DATA cow.vtp ARGS --reference=${CMAKE_BINARY_DIR}/Testing/Temporary/TestOutput.png DEPENDS TestOutput NO_BASELINE)
 f3d_test(NAME TestUnsupportedInputOutput DATA unsupportedFile.dummy REGEXP "No files loaded, no rendering performed" NO_BASELINE)
 f3d_test(NAME TestOutputNoBackground DATA cow.vtp ARGS --no-background NO_BASELINE)
+f3d_test(NAME TestDepthOutput DATA suzanne.ply ARGS --depth-output=${CMAKE_BINARY_DIR}/Testing/Temporary/TestDepthOutputDepth.png NO_OUTPUT NO_BASELINE)
 
 # Basic record and play test
 f3d_test(NAME TestInteractionRecord DATA cow.vtp ARGS --interaction-test-record=${CMAKE_BINARY_DIR}/Testing/Temporary/TestInteractionRecord.log NO_BASELINE)

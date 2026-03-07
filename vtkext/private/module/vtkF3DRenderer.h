@@ -33,6 +33,7 @@ class vtkOrientationMarkerWidget;
 class vtkScalarBarActor;
 class vtkSkybox;
 class vtkTextActor;
+class vtkF3DRenderPass;
 
 class vtkF3DRenderer : public vtkOpenGLRenderer
 {
@@ -426,6 +427,8 @@ public:
    */
   void SetConsoleBadgeEnabled(bool enabled);
 
+  vtkF3DRenderPass* GetSceneRenderPass() const;
+
 private:
   vtkF3DRenderer();
   ~vtkF3DRenderer() override;
@@ -547,6 +550,7 @@ private:
   vtkNew<vtkActor> GridActor;
   vtkNew<vtkSkybox> SkyboxActor;
   vtkNew<vtkF3DUIActor> UIActor;
+  vtkSmartPointer<vtkF3DRenderPass> SceneRenderPass;
 
   unsigned int Timer = 0; // Timer OpenGL query
 

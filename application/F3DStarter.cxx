@@ -83,6 +83,7 @@ public:
   struct F3DAppOptions
   {
     std::string Output;
+    std::string DepthOutput;
     bool BindingsList;
     bool NoBackground;
     bool NoRender;
@@ -743,6 +744,7 @@ public:
   {
     // Update typed app options from app options
     this->ParseOption(appOptions, "output", this->AppOptions.Output);
+    this->ParseOption(appOptions, "depth-output", this->AppOptions.DepthOutput);
     this->ParseOption(appOptions, "list-bindings", this->AppOptions.BindingsList);
     this->ParseOption(appOptions, "no-background", this->AppOptions.NoBackground);
     this->ParseOption(appOptions, "no-render", this->AppOptions.NoRender);
@@ -1106,7 +1108,8 @@ int F3DStarter::Start(int argc, char** argv)
   else
   {
     bool offscreen = !this->Internals->AppOptions.Reference.empty() ||
-      !this->Internals->AppOptions.Output.empty() || this->Internals->AppOptions.BindingsList;
+      !this->Internals->AppOptions.Output.empty() || !this->Internals->AppOptions.DepthOutput.empty() ||
+      this->Internals->AppOptions.BindingsList;
 
     try
     {
@@ -1270,6 +1273,14 @@ int F3DStarter::Start(int argc, char** argv)
     fs::path reference = f3d::utils::collapsePath(this->Internals->AppOptions.Reference);
     fs::path output = this->Internals->applyFilenameTemplate(
       f3d::utils::collapsePath(this->Internals->AppOptions.Output));
+    fs::path depthOutput = this->Internals->applyFilenameTemplate(
+      f3d::utils::collapsePath(this->Internals->AppOptions.DepthOutput));
+
+    if (depthOutput == "-")
+    {
+      f3d::log::error("The --depth-output option only supports writing to a PNG file path.");
+      return EXIT_FAILURE;
+    }
 
     // Render and compare with file if needed
     if (!reference.empty())
@@ -1355,7 +1366,7 @@ int F3DStarter::Start(int argc, char** argv)
       }
     }
     // Render to file if needed
-    else if (!output.empty())
+    else if (!output.empty() || !depthOutput.empty())
     {
       if (this->Internals->LoadedFiles.empty() && !noDataForceRender.has_value())
       {
@@ -1363,34 +1374,55 @@ int F3DStarter::Start(int argc, char** argv)
         return EXIT_FAILURE;
       }
 
-      f3d::image img = window.renderToImage(this->Internals->AppOptions.NoBackground);
-      this->Internals->addOutputImageMetadata(img);
+      if (!output.empty())
+      {
+        f3d::image img = window.renderToImage(this->Internals->AppOptions.NoBackground);
+        this->Internals->addOutputImageMetadata(img);
 
-      if (renderToStdout)
-      {
-        const auto buffer = img.saveBuffer();
-        std::copy(buffer.begin(), buffer.end(), std::ostreambuf_iterator(std::cout));
-        f3d::log::debug("Output image saved to stdout");
+        if (renderToStdout)
+        {
+          const auto buffer = img.saveBuffer();
+          std::copy(buffer.begin(), buffer.end(), std::ostreambuf_iterator(std::cout));
+          f3d::log::debug("Output image saved to stdout");
+        }
+        else
+        {
+          try
+          {
+            img.save(output);
+          }
+          catch (const f3d::image::write_exception& ex)
+          {
+            f3d::log::error("Could not write output: ", ex.what());
+            return EXIT_FAILURE;
+          }
+
+          f3d::log::debug("Output image saved to ", output);
+        }
       }
-      else
+
+      if (!depthOutput.empty())
       {
+        f3d::image depthImg = window.renderDepthToImage();
+        this->Internals->addOutputImageMetadata(depthImg);
+
         try
         {
-          img.save(output);
+          depthImg.save(depthOutput, f3d::image::SaveFormat::PNG);
         }
         catch (const f3d::image::write_exception& ex)
         {
-          f3d::log::error("Could not write output: ", ex.what());
+          f3d::log::error("Could not write depth output: ", ex.what());
           return EXIT_FAILURE;
         }
 
-        f3d::log::debug("Output image saved to ", output);
+        f3d::log::debug("Depth output image saved to ", depthOutput);
       }
 
       if (this->Internals->FilesGroups.size() > 1)
       {
-        f3d::log::warn("An output image was saved using a single 3D file, other provided 3D "
-                       "files were ignored.");
+        f3d::log::warn("Output image generation was performed using a single 3D file, other "
+                       "provided 3D files were ignored.");
       }
     }
     // Start interaction

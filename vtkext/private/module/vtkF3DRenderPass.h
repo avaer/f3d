@@ -44,6 +44,11 @@ public:
   vtkSetVector6Macro(Bounds, double);
   vtkSetMacro(CircleOfConfusionRadius, double);
 
+  vtkTextureObject* GetMainDepthTexture() const
+  {
+    return this->MainPass ? this->MainPass->GetDepthTexture() : nullptr;
+  }
+
   vtkF3DRenderPass(const vtkF3DRenderPass&) = delete;
   void operator=(const vtkF3DRenderPass&) = delete;
 

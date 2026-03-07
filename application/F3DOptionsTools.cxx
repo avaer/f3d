@@ -63,6 +63,7 @@ static inline const std::array<CLIGroup, 8> CLIOptions = {{
 #endif
   { "Applicative",
     { { "output", "", "Render to file", "<png file>", "" },
+      { "depth-output", "", "Render normalized z-buffer depth to a 16-bit grayscale PNG file", "<png file>", "" },
       { "no-background", "", "No background when render to file", "<bool>", "1" },
       { "help", "h", "Print help", "", "" }, { "version", "", "Print version details", "", "" },
       { "list-readers", "", "Print the list of readers", "", "" },
