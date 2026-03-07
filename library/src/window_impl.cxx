@@ -9,13 +9,13 @@
 #include "utils.h"
 
 #include "vtkF3DExternalRenderWindow.h"
+#include "vtkF3DRenderPass.h"
 
 #include "vtkF3DGenericImporter.h"
 #include "vtkF3DNoRenderWindow.h"
 #include "vtkF3DRenderer.h"
 
 #include <vtkCamera.h>
-#include <vtkF3DRenderPass.h>
 #include <vtkImageData.h>
 #include <vtkImageExport.h>
 #include <vtkInformation.h>
@@ -23,7 +23,6 @@
 #include <vtkPNGReader.h>
 #include <vtkPointGaussianMapper.h>
 #include <vtkRenderWindowInteractor.h>
-#include <vtkRendererSource.h>
 #include <vtkRendererCollection.h>
 #include <vtkRenderingOpenGLConfigure.h>
 #include <vtkTextureObject.h>
@@ -52,6 +51,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <sstream>
 #include <vector>
 
@@ -642,6 +642,11 @@ image window_impl::renderToImage(bool noBackground)
 
   vtkNew<vtkWindowToImageFilter> rtW2if;
   rtW2if->SetInput(this->Internals->RenWin);
+  rtW2if->ReadFrontBufferOff();
+  rtW2if->ShouldRerenderOff();
+
+  double bgColor[3];
+  this->Internals->Renderer->GetBackground(bgColor);
 
   if (noBackground)
   {
@@ -661,6 +666,11 @@ image window_impl::renderToImage(bool noBackground)
   image output(dims[0], dims[1], cmp);
   exporter->Export(output.getContent());
 
+  if (noBackground)
+  {
+    this->Internals->Renderer->SetBackground(bgColor);
+  }
+
   return output;
 }
 
@@ -672,47 +682,54 @@ image window_impl::renderDepthToImage()
   auto* renderPass = this->Internals->Renderer->GetSceneRenderPass();
   auto* depthTexture = renderPass ? renderPass->GetMainDepthTexture() : nullptr;
 
-  if (!depthTexture)
+  int dims[2] = { 0, 0 };
+  std::vector<float> normalizedDepth;
+
+  if (depthTexture)
   {
-    vtkNew<vtkRendererSource> rendererSource;
-    rendererSource->SetInput(this->Internals->Renderer);
-    rendererSource->WholeWindowOff();
-    rendererSource->DepthValuesOnlyOn();
-    rendererSource->RenderFlagOn();
-    rendererSource->Update();
+    dims[0] = static_cast<int>(depthTexture->GetWidth());
+    dims[1] = static_cast<int>(depthTexture->GetHeight());
+    normalizedDepth.resize(static_cast<size_t>(dims[0]) * static_cast<size_t>(dims[1]), 1.0f);
 
-    int dims[3] = { 0, 0, 0 };
-    rendererSource->GetOutput()->GetDimensions(dims);
-    image output(dims[0], dims[1], 1, image::ChannelType::SHORT);
-    const auto* depthFloat =
-      static_cast<const float*>(rendererSource->GetOutput()->GetScalarPointer());
+    unsigned int unsignedDims[2] = { static_cast<unsigned int>(dims[0]), static_cast<unsigned int>(dims[1]) };
+    vtkIdType increments[2] = { 0, 0 };
+    vtkSmartPointer<vtkPixelBufferObject> pbo;
+    pbo.TakeReference(depthTexture->Download());
 
-    auto* outputPtr = static_cast<unsigned short*>(output.getContent());
-    const size_t pixelCount = static_cast<size_t>(dims[0]) * static_cast<size_t>(dims[1]);
-
-    // Depth output stores the raw normalized z-buffer value, not linear camera-space distance.
-    // The captured float depth is expected in [0, 1], where 0 is the near plane and 1 is the far
-    // plane or background. The PNG encoding is a single-channel 16-bit grayscale image using:
-    // encoded = round(clamp(depth, 0.0, 1.0) * 65535.0).
-    for (size_t i = 0; i < pixelCount; ++i)
+    if (pbo->GetType() == VTK_FLOAT)
     {
-      const float depth = std::isfinite(depthFloat[i]) ? depthFloat[i] : 1.0f;
-      const float clampedDepth = std::clamp(depth, 0.0f, 1.0f);
-      outputPtr[i] = static_cast<unsigned short>(std::round(clampedDepth * 65535.0f));
+      pbo->Download2D(
+        VTK_FLOAT, normalizedDepth.data(), unsignedDims, depthTexture->GetComponents(), increments);
     }
-
-    return output;
+    else
+    {
+      normalizedDepth.clear();
+    }
   }
 
-  unsigned int dims[2] = { depthTexture->GetWidth(), depthTexture->GetHeight() };
-  vtkIdType incr[2] = { 0, 0 };
-  std::vector<float> depthFloat(static_cast<size_t>(dims[0]) * static_cast<size_t>(dims[1]));
-  vtkSmartPointer<vtkPixelBufferObject> pbo;
-  pbo.TakeReference(depthTexture->Download());
-  pbo->Download2D(VTK_FLOAT, depthFloat.data(), dims, depthTexture->GetComponents(), incr);
+  if (normalizedDepth.empty())
+  {
+    vtkNew<vtkWindowToImageFilter> rtW2if;
+    rtW2if->SetInput(this->Internals->RenWin);
+    rtW2if->SetInputBufferTypeToZBuffer();
+    rtW2if->ReadFrontBufferOff();
+    rtW2if->ShouldRerenderOff();
+
+    vtkNew<vtkImageExport> exporter;
+    exporter->SetInputConnection(rtW2if->GetOutputPort());
+    exporter->ImageLowerLeftOn();
+
+    const int* exporterDims = exporter->GetDataDimensions();
+    dims[0] = exporterDims[0];
+    dims[1] = exporterDims[1];
+
+    image depthFloat(dims[0], dims[1], 1, image::ChannelType::FLOAT);
+    exporter->Export(depthFloat.getContent());
+    const auto* depthFloatPtr = static_cast<const float*>(depthFloat.getContent());
+    normalizedDepth.assign(depthFloatPtr, depthFloatPtr + static_cast<size_t>(dims[0]) * dims[1]);
+  }
 
   image output(dims[0], dims[1], 1, image::ChannelType::SHORT);
-
   auto* outputPtr = static_cast<unsigned short*>(output.getContent());
   const size_t pixelCount = static_cast<size_t>(dims[0]) * static_cast<size_t>(dims[1]);
 
@@ -722,7 +739,7 @@ image window_impl::renderDepthToImage()
   // encoded = round(clamp(depth, 0.0, 1.0) * 65535.0).
   for (size_t i = 0; i < pixelCount; ++i)
   {
-    const float depth = std::isfinite(depthFloat[i]) ? depthFloat[i] : 1.0f;
+    const float depth = std::isfinite(normalizedDepth[i]) ? normalizedDepth[i] : 1.0f;
     const float clampedDepth = std::clamp(depth, 0.0f, 1.0f);
     outputPtr[i] = static_cast<unsigned short>(std::round(clampedDepth * 65535.0f));
   }

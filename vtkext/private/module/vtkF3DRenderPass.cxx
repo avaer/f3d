@@ -206,8 +206,8 @@ void vtkF3DRenderPass::Initialize(const vtkRenderState* s)
     this->MainPass->SetDelegatePass(camP);
     this->MainPass->SetColorFormat(vtkTextureObject::Float32);
 
-    // Needed because VTK can pick the wrong format with certain drivers
-    this->MainPass->SetDepthFormat(vtkTextureObject::Fixed32);
+    // Use float depth so depth export can read back normalized scene depth reliably.
+    this->MainPass->SetDepthFormat(vtkTextureObject::Float32);
   }
 
   {
@@ -227,8 +227,7 @@ void vtkF3DRenderPass::Initialize(const vtkRenderState* s)
     this->MainOnTopPass = vtkSmartPointer<vtkFramebufferPass>::New();
     this->MainOnTopPass->SetDelegatePass(camP);
 
-    // Needed because VTK can pick the wrong format with certain drivers
-    this->MainOnTopPass->SetDepthFormat(vtkTextureObject::Fixed32);
+    this->MainOnTopPass->SetDepthFormat(vtkTextureObject::Float32);
   }
 
   this->InitializeTime = this->GetMTime();

@@ -550,7 +550,7 @@ private:
   vtkNew<vtkActor> GridActor;
   vtkNew<vtkSkybox> SkyboxActor;
   vtkNew<vtkF3DUIActor> UIActor;
-  vtkSmartPointer<vtkF3DRenderPass> SceneRenderPass;
+  vtkF3DRenderPass* SceneRenderPass = nullptr;
 
   unsigned int Timer = 0; // Timer OpenGL query
 
